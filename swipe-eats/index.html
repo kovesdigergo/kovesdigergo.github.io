@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Swipe Eats</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <header class="app-header">
+      <div class="logo">
+        <span class="logo-icon">🍽️</span>
+        <h1>Swipe Eats</h1>
+      </div>
+      <p class="tagline">Swipe együtt, egyetek ugyanott</p>
+    </header>
+
+    <main class="home-main">
+
+      <div class="card-panel">
+        <h2>Új szoba</h2>
+        <div class="form-group">
+          <label>Hány barát játszik?</label>
+          <div class="number-selector">
+            <button class="num-btn" id="decreaseFriends">−</button>
+            <span id="friendCount">3</span>
+            <button class="num-btn" id="increaseFriends">+</button>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="createRoom">🎲 Szoba létrehozása</button>
+      </div>
+
+      <div class="divider"><span>vagy</span></div>
+
+      <div class="card-panel">
+        <h2>Csatlakozás kóddal</h2>
+        <div class="form-group">
+          <label>Kérd el a szoba kódját</label>
+          <input type="text" id="roomCodeInput" placeholder="pl. AB12" maxlength="4" class="code-input" autocomplete="off" autocorrect="off" spellcheck="false">
+        </div>
+        <button class="btn btn-secondary" id="joinRoom">🚀 Csatlakozás</button>
+        <div id="errorMsg"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="js/restaurants.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
