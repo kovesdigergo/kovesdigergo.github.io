@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Swipe Eats – Választás</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container swipe-page">
+
+    <header class="swipe-header">
+      <a class="back-btn" href="index.html">←</a>
+      <div class="session-info">
+        <span id="friendBadge">1. barát</span>
+        <span class="progress-text" id="progressText">0 / 15</span>
+      </div>
+      <div class="room-code" id="roomCodeDisplay">----</div>
+    </header>
+
+    <!-- Progress bar -->
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+
+    <!-- GPS badge (shown only in GPS mode) -->
+    <div id="gpsBadge">📍 GPS éttermek</div>
+
+    <div class="swipe-area">
+      <div class="cards-container" id="cardsContainer"></div>
+      <div class="swipe-hint" id="swipeHint">
+        <span>← nem tetszik</span>
+        <span>tetszik →</span>
+      </div>
+    </div>
+
+    <div class="action-buttons">
+      <button class="action-btn nope-btn" id="nopeBtn" aria-label="Nem tetszik">✕</button>
+      <button class="action-btn like-btn" id="likeBtn" aria-label="Tetszik">♥</button>
+    </div>
+
+    <!-- Pass phone overlay -->
+    <div class="friend-overlay" id="friendOverlay" style="display:none">
+      <div class="overlay-content">
+        <div class="overlay-icon">📱</div>
+        <h2>Add át a telefont!</h2>
+        <p id="nextFriendText">A 2. barát következik</p>
+        <button class="btn btn-primary" id="nextFriendBtn">Kész, indulhat! →</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="firebase-config.js"></script>
+  <script src="js/restaurants.js"></script>
+  <script src="js/gps.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
