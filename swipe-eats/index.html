@@ -10,97 +10,168 @@
 </head>
 <body>
 
-  <!-- Loading overlay (GPS + Overpass fetch) -->
+  <!-- Loading overlay -->
   <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner"></div>
     <p class="loading-text" id="loadingText">Betöltés...</p>
   </div>
 
+  <!-- Global error toast -->
+  <div id="errorMsg"></div>
+
   <div class="app-container">
 
-    <header class="app-header">
-      <div class="logo">
-        <span class="logo-icon">🍽️</span>
-        <h1>Swipe Eats</h1>
+    <!-- ── SCREEN: Mode selection ── -->
+    <div class="screen" id="screen-mode">
+      <header class="app-header">
+        <div class="logo">
+          <span class="logo-icon">🍽️</span>
+          <h1>Swipe Eats</h1>
+        </div>
+        <p class="tagline">Swipe együtt, egyetek ugyanott</p>
+      </header>
+
+      <main class="mode-main">
+        <div class="mode-cards">
+          <button id="modeSingle" class="mode-card">
+            <span class="mode-card-icon">📱</span>
+            <span class="mode-card-title">Egy telefon</span>
+            <span class="mode-card-desc">Körbeadjátok egymásnak</span>
+          </button>
+          <button id="modeMulti" class="mode-card">
+            <span class="mode-card-icon">👥</span>
+            <span class="mode-card-title">Mindenki saját telefonon</span>
+            <span class="mode-card-desc">Valós idejű szinkron</span>
+          </button>
+        </div>
+
+        <!-- Notification opt-in -->
+        <div class="notif-prompt" id="notifPrompt">
+          <span>🔔</span>
+          <span>Értesítés, ha van match?</span>
+          <button id="enableNotif">Engedélyezés</button>
+        </div>
+      </main>
+    </div>
+
+    <!-- ── SCREEN: Settings ── -->
+    <div class="screen" id="screen-settings">
+      <div class="screen-back">
+        <button class="back-btn" data-back="screen-mode">←</button>
+        <span class="screen-title">Beállítások</span>
       </div>
-      <p class="tagline">Swipe együtt, egyetek ugyanott</p>
-    </header>
 
-    <main class="home-main">
+      <main class="settings-main">
+        <div class="card-panel">
+          <h2>🍴 Éttermek</h2>
+          <div class="form-group">
+            <div class="form-label">
+              <span>Éttermek száma</span>
+              <span class="form-label-val" id="countVal">15</span>
+            </div>
+            <input type="range" id="countSlider" min="5" max="50" value="15" step="1">
+          </div>
+          <div class="form-group">
+            <div class="form-label">
+              <span>Keresési kör</span>
+              <span class="form-label-val" id="radiusVal">2 km</span>
+            </div>
+            <input type="range" id="radiusSlider" min="1" max="20" value="2" step="1">
+          </div>
+        </div>
 
-      <!-- Room creation -->
-      <div class="card-panel">
-        <h2>Új szoba</h2>
-        <div class="form-group">
-          <label>Hány barát játszik?</label>
+        <!-- Friend count (shown by JS after mode is chosen) -->
+        <div class="card-panel" id="friendsRow" style="display:none">
+          <h2>👥 Hányan játszotok?</h2>
           <div class="number-selector">
             <button class="num-btn" id="decreaseFriends">−</button>
             <span id="friendCount">3</span>
             <button class="num-btn" id="increaseFriends">+</button>
           </div>
         </div>
-        <button class="btn btn-primary" id="createRoom">🎲 Szoba létrehozása</button>
-        <p style="font-size:12px;color:var(--text-muted);margin-top:10px;text-align:center">
+
+        <button class="btn btn-primary" id="createRoom">🎲 Éttermek betöltése</button>
+        <p style="font-size:12px;color:var(--text-muted);text-align:center;padding:0 4px">
           📍 GPS-t automatikusan megpróbálja – internet nélkül demo éttermeket tölt be
         </p>
+      </main>
+    </div>
+
+    <!-- ── SCREEN: Share – single device ── -->
+    <div class="screen" id="screen-share-single">
+      <div class="screen-back">
+        <button class="back-btn" data-back="screen-settings">←</button>
+        <span class="screen-title">Szoba</span>
       </div>
 
-      <!-- Share box – shown after room creation -->
-      <div class="share-box" id="shareBox">
-        <div class="share-header">
-          <span class="share-icon-big">🎉</span>
-          <div>
-            <div class="share-title">Szoba létrehozva!</div>
-            <div class="share-code" id="sharedCode">----</div>
-          </div>
+      <main class="share-main">
+        <div class="share-hero">
+          <div class="share-hero-icon">🎉</div>
+          <div class="share-hero-title">Szoba kész!</div>
+          <div class="share-hero-sub">Az 1. barát kezdhet swipelni</div>
         </div>
-        <div class="gps-badge" id="gpsUsedBadge">📍 Valódi GPS éttermek betöltve</div>
-        <div class="share-url-row">
-          <a class="share-url" id="shareUrl" href="#" target="_blank" rel="noopener">—</a>
+
+        <div class="share-code-box">
+          <div class="share-code-label">Szoba kód</div>
+          <div class="share-code-value" id="singleCode">----</div>
         </div>
+
+        <div class="gps-badge" id="singleGpsBadge">📍 Valódi GPS éttermek betöltve</div>
+
         <div class="share-btns">
-          <button class="btn btn-primary" id="goToSwipe">▶ Indítás (1. barát)</button>
-          <button class="btn btn-secondary" id="copyShareBtn">📋 Link másolása</button>
+          <button class="btn btn-primary" id="goToSwipeSingle">▶ Indítás (1. barát)</button>
+          <button class="btn btn-secondary" id="copySingleBtn">📋 Kód másolása</button>
         </div>
+      </main>
+    </div>
+
+    <!-- ── SCREEN: Share – multi device ── -->
+    <div class="screen" id="screen-share-multi">
+      <div class="screen-back">
+        <button class="back-btn" data-back="screen-settings">←</button>
+        <span class="screen-title">Megosztás</span>
       </div>
 
-      <div class="divider"><span>vagy</span></div>
-
-      <!-- Join room -->
-      <div class="card-panel">
-        <h2>Csatlakozás kóddal</h2>
-        <div class="form-group">
-          <label>Add meg a szoba kódját</label>
-          <input type="text" id="roomCodeInput" placeholder="pl. AB12" maxlength="4"
-                 class="code-input" autocomplete="off" autocorrect="off" spellcheck="false">
+      <main class="share-main">
+        <div class="share-hero">
+          <div class="share-hero-icon">🌐</div>
+          <div class="share-hero-title">Szoba létrehozva!</div>
+          <div class="share-hero-sub">Küldd el a linket barátaidnak</div>
         </div>
-        <button class="btn btn-secondary" id="joinRoom">🚀 Csatlakozás</button>
-        <div id="errorMsg"></div>
-      </div>
 
-      <!-- Notification opt-in -->
-      <div class="notif-prompt" id="notifPrompt">
-        <span>🔔</span>
-        <span>Értesítés, ha van match?</span>
-        <button id="enableNotif">Engedélyezés</button>
-      </div>
+        <div class="gps-badge" id="multiGpsBadge">📍 Valódi GPS éttermek betöltve</div>
 
-      <!-- Firebase hint -->
-      <div class="firebase-hint">
-        <span class="fi">⚡</span>
-        <span>
-          <span id="firebaseStatus"></span>
-          <strong>Valós idejű mód:</strong> mindenki a saját telefonján swipelhet –
-          állítsd be a <a href="firebase-config.js" target="_blank">firebase-config.js</a> fájlt.
-        </span>
-      </div>
+        <div class="share-url-box">
+          <div class="share-url-label">Megosztási link</div>
+          <a class="share-url-link" id="multiShareUrl" href="#" target="_blank" rel="noopener">—</a>
+        </div>
+        <input type="hidden" id="multiShareBlobId" value="">
 
-    </main>
+        <div class="share-btns">
+          <button class="btn btn-primary" id="goToSwipeMulti">▶ Én is elkezdek swipelni</button>
+          <button class="btn btn-secondary" id="copyMultiBtn">📋 Link másolása</button>
+        </div>
+      </main>
+    </div>
+
+    <!-- ── SCREEN: Join (opened via ?blob= link) ── -->
+    <div class="screen" id="screen-join">
+      <main class="join-main">
+        <div class="join-icon">🤝</div>
+        <div class="join-title">Meghívtak!</div>
+        <div class="join-sub">Barátod megosztott veled egy Swipe Eats szobát. Kattints a csatlakozáshoz!</div>
+        <input type="hidden" id="joinBlobId" value="">
+        <button class="btn btn-primary" id="joinBtn" style="width:100%;max-width:320px">🚀 Csatlakozom!</button>
+      </main>
+    </div>
+
   </div>
 
   <script src="firebase-config.js"></script>
   <script src="js/restaurants.js"></script>
+  <script src="js/photos.js"></script>
   <script src="js/gps.js"></script>
+  <script src="js/sync.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
