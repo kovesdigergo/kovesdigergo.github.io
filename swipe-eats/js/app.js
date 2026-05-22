@@ -1,3 +1,8 @@
+// ─── XSS helper ──────────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const STORAGE_KEY    = 'swipe-eats-rooms';
 const SWIPE_THRESHOLD = 80;
@@ -200,7 +205,8 @@ function setLoading(visible, msg) {
   const el = document.getElementById('loadingOverlay');
   if (!el) return;
   el.style.display = visible ? 'flex' : 'none';
-  if (msg) document.getElementById('loadingText').textContent = msg;
+  const lt = document.getElementById('loadingText');
+  if (lt && msg) lt.textContent = msg;
 }
 
 function showMultiShareScreen(blobId, gps) {
@@ -253,7 +259,7 @@ function initSwipe() {
   } else {
     const room = getRoom(roomCode);
     if (!room) { window.location.href = 'index.html'; return; }
-    document.getElementById('roomCodeDisplay').textContent = roomCode;
+    document.getElementById('roomCodeDisplay').style.display = 'none';
     document.getElementById('friendBadge').textContent = `${room.currentFriend + 1}. barát`;
   }
 
@@ -290,15 +296,15 @@ function initSwipe() {
       <div class="stamp stamp-nope">NEM ✕</div>
       <div class="card-image"></div>
       <div class="card-info">
-        <h3 class="card-name">${r.name}</h3>
+        <h3 class="card-name">${escHtml(r.name)}</h3>
         <div class="card-meta">
-          <span class="rating-badge">⭐ ${r.rating}</span>
-          <span class="meta-text">${r.cuisine}</span>
-          <span class="meta-text">📍 ${r.distance}</span>
+          <span class="rating-badge">⭐ ${escHtml(r.rating)}</span>
+          <span class="meta-text">${escHtml(r.cuisine)}</span>
+          <span class="meta-text">📍 ${escHtml(r.distance)}</span>
         </div>
-        <div class="card-tags">${r.tags.slice(0, 3).map(t => `<span class="tag">${t}</span>`).join('')}</div>
-        ${r.description ? `<p class="card-desc">${r.description}</p>` : ''}
-        <span class="price-label">${priceLabel(r.priceLevel)}</span>
+        <div class="card-tags">${r.tags.slice(0, 3).map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}</div>
+        ${r.description ? `<p class="card-desc">${escHtml(r.description)}</p>` : ''}
+        <span class="price-label">${escHtml(priceLabel(r.priceLevel))}</span>
       </div>`;
 
     // Apply photo (with gradient fallback)
@@ -363,10 +369,12 @@ function initSwipe() {
     } else {
       // localStorage
       const room = getRoom(roomCode);
-      const key = String(room.currentFriend);
-      if (!room.votes[key]) room.votes[key] = {};
-      room.votes[key][restaurant.id] = liked;
-      saveRoom(room);
+      if (room) {
+        const key = String(room.currentFriend);
+        if (!room.votes[key]) room.votes[key] = {};
+        room.votes[key][restaurant.id] = liked;
+        saveRoom(room);
+      }
     }
 
     // Promote back cards visually
@@ -409,6 +417,7 @@ function initSwipe() {
     } else {
       // Single device: pass phone or go to match
       const room = getRoom(roomCode);
+      if (!room) { window.location.href = 'index.html'; return; }
       if (room.currentFriend + 1 >= room.totalFriends) {
         setTimeout(() => window.location.href = `match.html?room=${roomCode}`, 300);
       } else {
@@ -421,16 +430,18 @@ function initSwipe() {
 
   function showPassOverlay(nextIdx) {
     const overlay = document.getElementById('friendOverlay');
-    document.getElementById('nextFriendText').textContent = `A ${nextIdx + 1}. barát következik`;
+    const txt = document.getElementById('nextFriendText');
+    if (!overlay) return;
+    if (txt) txt.textContent = `A ${nextIdx + 1}. barát következik`;
     overlay.style.display = 'flex';
     requestAnimationFrame(() => overlay.classList.add('visible'));
   }
 
   document.getElementById('nextFriendBtn')?.addEventListener('click', () => {
     const overlay = document.getElementById('friendOverlay');
-    overlay.classList.remove('visible');
-    setTimeout(() => { overlay.style.display = 'none'; }, 300);
+    if (overlay) { overlay.classList.remove('visible'); setTimeout(() => { overlay.style.display = 'none'; }, 300); }
     const room = getRoom(roomCode);
+    if (!room) { window.location.href = 'index.html'; return; }
     currentIndex = 0;
     document.getElementById('friendBadge').textContent = `${room.currentFriend + 1}. barát`;
     renderCards(); updateProgress();
@@ -577,17 +588,17 @@ function renderMatchPage(container, restaurants, scores, totalFriends, roomCode,
 function matchCard(r, i) {
   return `
     <div class="match-card" style="animation-delay:${0.1 + i * 0.12}s">
-      <div class="match-card-img" style="background:${r.gradient}"
-           data-photo="${r.photo || ''}" data-emoji="${r.emoji}">
-        <span class="match-card-emoji">${r.emoji}</span>
+      <div class="match-card-img" style="background:${escHtml(r.gradient)}"
+           data-photo="${escHtml(r.photo || '')}" data-emoji="${escHtml(r.emoji)}">
+        <span class="match-card-emoji">${escHtml(r.emoji)}</span>
       </div>
       <div class="match-card-body">
-        <div class="match-card-name">${r.name}</div>
-        <div class="match-card-meta">⭐ ${r.rating} · ${r.cuisine} · 📍 ${r.distance}</div>
-        ${r.description ? `<p class="match-card-desc">${r.description}</p>` : ''}
-        <div class="card-tags">${r.tags.slice(0, 3).map(t => `<span class="tag">${t}</span>`).join('')}</div>
+        <div class="match-card-name">${escHtml(r.name)}</div>
+        <div class="match-card-meta">⭐ ${escHtml(r.rating)} · ${escHtml(r.cuisine)} · 📍 ${escHtml(r.distance)}</div>
+        ${r.description ? `<p class="match-card-desc">${escHtml(r.description)}</p>` : ''}
+        <div class="card-tags">${r.tags.slice(0, 3).map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}</div>
       </div>
-      <a class="btn-maps" href="${mapsLink(r)}" target="_blank" rel="noopener">📍</a>
+      <a class="btn-maps" href="${escHtml(mapsLink(r))}" target="_blank" rel="noopener">📍</a>
     </div>`;
 }
 
@@ -595,13 +606,13 @@ function voteRow(r, count, total) {
   const pct = Math.round(count / total * 100);
   return `
     <div class="vote-row">
-      <div class="vote-emoji" style="background:${r.gradient}">${r.emoji}</div>
+      <div class="vote-emoji" style="background:${escHtml(r.gradient)}">${escHtml(r.emoji)}</div>
       <div class="vote-info">
-        <div class="vote-name">${r.name}</div>
-        <div class="vote-bar-bg"><div class="vote-bar-fill" style="width:0%" data-pct="${pct}"></div></div>
+        <div class="vote-name">${escHtml(r.name)}</div>
+        <div class="vote-bar-bg"><div class="vote-bar-fill" style="width:0%" data-pct="${escHtml(pct)}"></div></div>
       </div>
-      <a class="btn-maps-sm" href="${mapsLink(r)}" target="_blank" rel="noopener" title="Navigálás">📍</a>
-      <div class="vote-count">${count}/${total}</div>
+      <a class="btn-maps-sm" href="${escHtml(mapsLink(r))}" target="_blank" rel="noopener" title="Navigálás">📍</a>
+      <div class="vote-count">${escHtml(count)}/${escHtml(total)}</div>
     </div>`;
 }
 
