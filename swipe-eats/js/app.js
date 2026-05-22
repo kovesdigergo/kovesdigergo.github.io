@@ -125,28 +125,28 @@ function initHome() {
         showMultiShareScreen(newBlobId, gps);
       } catch {
         setLoading(false);
-        showError('Nem sikerült a szobát létrehozni. Próbáld újra!');
+        showError('Hálózati hiba – ellenőrizd az internetet, majd próbáld újra!');
         document.getElementById('createRoom').disabled = false;
       }
     } else {
-      // localStorage room
+      // localStorage room – go directly to swipe, no share screen needed
       const code = generateCode();
       saveRoom({ code, totalFriends: friendCount, currentFriend: 0, votes: {} });
-      showSingleShareScreen(code, gps);
+      window.location.href = `swipe.html?room=${code}&mode=single`;
     }
   });
 
-  // ── Single mode: share screen events ─────────────────────────────────────────
-  document.getElementById('goToSwipeSingle').addEventListener('click', () => {
-    const code = document.getElementById('singleCode').textContent;
-    window.location.href = `swipe.html?room=${code}&mode=single`;
-  });
-  document.getElementById('copySingleBtn').addEventListener('click', () => {
-    // single mode: just copy the code (no real link needed)
-    const code = document.getElementById('singleCode').textContent;
-    navigator.clipboard?.writeText(code);
-    flashBtn('copySingleBtn', '✓ Másolva!');
-  });
+  // ── Slider step buttons ───────────────────────────────────────────────────────
+  function stepSlider(sliderId, delta) {
+    const sl = document.getElementById(sliderId);
+    if (!sl) return;
+    sl.value = Math.min(sl.max, Math.max(sl.min, parseInt(sl.value, 10) + delta));
+    sl.dispatchEvent(new Event('input'));
+  }
+  document.getElementById('countMinus')?.addEventListener('click', () => stepSlider('countSlider', -1));
+  document.getElementById('countPlus')?.addEventListener('click',  () => stepSlider('countSlider',  1));
+  document.getElementById('radiusMinus')?.addEventListener('click', () => stepSlider('radiusSlider', -1));
+  document.getElementById('radiusPlus')?.addEventListener('click',  () => stepSlider('radiusSlider',  1));
 
   // ── Multi mode: share screen events ──────────────────────────────────────────
   document.getElementById('goToSwipeMulti').addEventListener('click', () => {
@@ -201,12 +201,6 @@ function setLoading(visible, msg) {
   if (!el) return;
   el.style.display = visible ? 'flex' : 'none';
   if (msg) document.getElementById('loadingText').textContent = msg;
-}
-
-function showSingleShareScreen(code, gps) {
-  document.getElementById('singleCode').textContent = code;
-  if (gps) document.getElementById('singleGpsBadge')?.style.setProperty('display', 'flex');
-  showScreen('screen-share-single');
 }
 
 function showMultiShareScreen(blobId, gps) {
@@ -454,6 +448,15 @@ function initWaiting() {
 
   let redirected = false;
 
+  // Show the share URL so the creator can still send the link while waiting
+  const shareUrl = `${location.origin}${location.pathname.replace('waiting.html', 'index.html')}?blob=${blobId}`;
+  const shareLink = document.getElementById('waitShareUrl');
+  if (shareLink) { shareLink.href = shareUrl; shareLink.textContent = shareUrl.replace(/^https?:\/\//, ''); }
+  document.getElementById('copyWaitLink')?.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(shareUrl); } catch { /* ignore */ }
+    flashBtn('copyWaitLink', '✓ Másolva!');
+  });
+
   function render(data) {
     const participants = Object.entries(data.participants || {});
     const total = data.totalFriends || participants.length || 1;
@@ -473,6 +476,7 @@ function initWaiting() {
       </div>`;
     }).join('');
 
+    // Auto-redirect when everyone who was expected has finished
     if (doneCount >= total && total > 0 && !redirected) {
       redirected = true;
       poller.stop();
@@ -482,15 +486,13 @@ function initWaiting() {
   }
 
   // Initial load
-  readBlob(blobId).then(render).catch(() => {});
+  readBlob(blobId).then(render).catch(() => {
+    showError('Nem sikerült betölteni az adatokat. Ellenőrizd az internetkapcsolatot!');
+  });
 
   const poller = pollBlob(blobId, 2500, render);
 
-  // Force-start button (shows after 30s)
-  setTimeout(() => {
-    const btn = document.getElementById('forceStart');
-    if (btn) btn.style.display = 'block';
-  }, 30000);
+  // Force-start always visible
   document.getElementById('forceStart')?.addEventListener('click', () => {
     poller.stop();
     window.location.href = `match.html?blob=${blobId}`;
