@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+  <div id="errorMsg"></div>
+
   <div class="app-container">
 
     <div class="waiting-header">
@@ -22,11 +25,15 @@
       <!-- Rendered by JS -->
     </div>
 
+    <!-- Share link so creator can still invite friends while waiting -->
+    <div class="wait-share-box">
+      <div class="share-url-label">📤 Megosztási link</div>
+      <a class="share-url-link" id="waitShareUrl" href="#" target="_blank" rel="noopener">—</a>
+      <button class="btn btn-secondary" id="copyWaitLink" style="margin-top:8px">📋 Link másolása</button>
+    </div>
+
     <div class="waiting-actions">
-      <p style="text-align:center;color:var(--text-muted);font-size:13px;padding:0 20px">
-        Ha mindenki kész, az eredmények automatikusan megjelennek.
-      </p>
-      <button class="btn btn-secondary" id="forceStart">⏭ Eredmények megtekintése most</button>
+      <button class="btn btn-secondary" id="forceStart">⏭ Eredmények most (ha valaki kimaradt)</button>
       <a class="btn btn-secondary" href="index.html" style="text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">🏠 Mégsem</a>
     </div>
 

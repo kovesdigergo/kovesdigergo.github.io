@@ -93,7 +93,7 @@ const RESTAURANTS = [
     tags: ['Bistro', 'Szezonális', 'Minőségi'],
     emoji: '🍽️', gradient: 'linear-gradient(135deg,#1a252f,#154360)',
     description: 'Szezonális alapanyagokból készített modern bistro fogások.',
-    photo: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=420&h=280&fit=crop&auto=format&q=80',
+    photo: 'https://images.unsplash.com/photo-1551218372-a8789b81b253?w=420&h=280&fit=crop&auto=format&q=80',
   },
   {
     id: 'r13', name: 'Bock Bisztró', cuisine: 'Magyar Fine Dining', rating: 4.6,
