@@ -8,6 +8,8 @@ module.exports = defineConfig({
   use: {
     baseURL: 'http://localhost:8080',
     screenshot: 'only-on-failure',
+    // Allow overriding the browser binary (e.g. preinstalled system Chromium)
+    ...(process.env.CHROMIUM_PATH ? { launchOptions: { executablePath: process.env.CHROMIUM_PATH } } : {}),
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

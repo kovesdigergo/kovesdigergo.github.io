@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#160E06">
   <title>Swipe Eats</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -128,8 +129,9 @@
         <input type="hidden" id="multiShareBlobId" value="">
 
         <div class="share-btns">
-          <button class="btn btn-primary" id="goToSwipeMulti">▶ Én is elkezdek swipelni</button>
+          <button class="btn btn-primary" id="shareNativeBtn" style="display:none">📤 Küldés barátoknak</button>
           <button class="btn btn-secondary" id="copyMultiBtn">📋 Link másolása</button>
+          <button class="btn btn-primary" id="goToSwipeMulti">▶ Én is elkezdek swipelni</button>
         </div>
       </main>
     </div>
@@ -147,7 +149,6 @@
 
   </div>
 
-  <script src="firebase-config.js"></script>
   <script src="js/restaurants.js"></script>
   <script src="js/photos.js"></script>
   <script src="js/gps.js"></script>

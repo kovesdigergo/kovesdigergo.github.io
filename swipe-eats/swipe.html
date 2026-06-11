@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#160E06">
   <title>Swipe Eats – Választás</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -17,7 +18,7 @@
         <span id="friendBadge">1. barát</span>
         <span class="progress-text" id="progressText">0 / 15</span>
       </div>
-      <div class="room-code" id="roomCodeDisplay">----</div>
+      <div class="room-code" id="roomCodeDisplay" style="display:none"></div>
     </header>
 
     <!-- Progress bar -->
@@ -53,7 +54,6 @@
 
   </div>
 
-  <script src="firebase-config.js"></script>
   <script src="js/restaurants.js"></script>
   <script src="js/photos.js"></script>
   <script src="js/gps.js"></script>
