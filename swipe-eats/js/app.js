@@ -164,12 +164,17 @@ function initHome() {
     try { await navigator.clipboard.writeText(url); } catch { /* ignore */ }
     flashBtn('copyMultiBtn', '✓ Másolva!');
   });
+  document.getElementById('shareNativeBtn')?.addEventListener('click', async () => {
+    const url = document.getElementById('multiShareUrl').href;
+    try { await navigator.share({ title: 'Swipe Eats', text: 'Válasszunk éttermet együtt! 🍽️', url }); } catch { /* user cancelled */ }
+  });
 
-  // ── Notification opt-in ───────────────────────────────────────────────────────
-  if (Notification.permission !== 'default') {
+  // ── Notification opt-in (iOS Safari has no Notification API – hide prompt) ────
+  if (!('Notification' in window) || Notification.permission !== 'default') {
     document.getElementById('notifPrompt')?.style.setProperty('display', 'none');
   }
   document.getElementById('enableNotif')?.addEventListener('click', async () => {
+    if (!('Notification' in window)) return;
     const ok = await Notification.requestPermission();
     const btn = document.getElementById('enableNotif');
     btn.textContent = ok === 'granted' ? '✓ Engedélyezve' : '✗ Letiltva';
@@ -216,6 +221,9 @@ function showMultiShareScreen(blobId, gps) {
   link.href = url;
   link.textContent = url.replace(/^https?:\/\//, '');
   if (gps) document.getElementById('multiGpsBadge')?.style.setProperty('display', 'flex');
+  if (navigator.share) document.getElementById('shareNativeBtn')?.style.setProperty('display', 'block');
+  // Re-enable so the button works again if the user navigates back
+  document.getElementById('createRoom').disabled = false;
   showScreen('screen-share-multi');
 }
 
@@ -252,14 +260,15 @@ function initSwipe() {
   let animating     = false;
   const uid         = getOrCreateUid();
 
-  // ── Header setup ──────────────────────────────────────────────────────────────
+  // ── Header setup (room code badge stays hidden in single-phone mode) ─────────
   if (mode === 'multi') {
-    document.getElementById('roomCodeDisplay').textContent = '🌐 Multi';
+    const rc = document.getElementById('roomCodeDisplay');
+    rc.textContent = '🌐 Online';
+    rc.style.display = '';
     document.getElementById('friendBadge').textContent = 'Saját telefon';
   } else {
     const room = getRoom(roomCode);
     if (!room) { window.location.href = 'index.html'; return; }
-    document.getElementById('roomCodeDisplay').style.display = 'none';
     document.getElementById('friendBadge').textContent = `${room.currentFriend + 1}. barát`;
   }
 
@@ -360,10 +369,12 @@ function initSwipe() {
     const liked = direction === 'right';
 
     if (mode === 'multi' && blobId) {
-      // Write vote to blob (fire-and-forget)
+      // Write vote to blob (fire-and-forget); capture progress now, the
+      // updater runs async after currentIndex may have moved on
+      const progressNow = currentIndex + 1;
       updateBlob(blobId, d => {
         const p = d.participants?.[uid];
-        if (p) { p.votes = p.votes || {}; p.votes[restaurant.id] = liked; p.progress = currentIndex + 1; }
+        if (p) { p.votes = p.votes || {}; p.votes[restaurant.id] = liked; p.progress = progressNow; }
         return d;
       }).catch(() => {/* silently ignore */});
     } else {
@@ -543,8 +554,6 @@ function renderMatchPage(container, restaurants, scores, totalFriends, roomCode,
   const partials    = restaurants.filter(r => scores[r.id] > 0 && scores[r.id] < totalFriends)
     .sort((a, b) => scores[b.id] - scores[a.id]).slice(0, 6);
 
-  const retryHref = roomCode ? `javascript:retryRoom('${roomCode}')` : 'index.html';
-
   if (fullMatches.length > 0) {
     container.innerHTML = `
       <div class="match-header">
@@ -556,26 +565,48 @@ function renderMatchPage(container, restaurants, scores, totalFriends, roomCode,
         ${fullMatches.map((r, i) => matchCard(r, i)).join('')}
       </div>
       <div class="match-actions">
-        <a class="btn btn-primary" href="${retryHref}">🔄 Újra</a>
-        <button class="btn btn-secondary" onclick="window.location.href='index.html'">🏠 Főoldal</button>
+        <button class="btn btn-primary" id="retryBtn">🔄 Újra</button>
+        <button class="btn btn-secondary" id="homeBtn">🏠 Főoldal</button>
       </div>`;
     startConfetti();
     scheduleNotif(fullMatches[0].name);
   } else {
+    const partialHtml = partials.length
+      ? partials.map(r => voteRow(r, scores[r.id], totalFriends)).join('')
+      : '<p class="empty-note">Senki nem lájkolt egyetlen éttermet sem 😅<br>Próbáljátok újra nagyobb keresési körrel!</p>';
     container.innerHTML = `
       <div class="no-match-header">
         <div class="match-icon">😕</div>
         <h1 class="no-match-title">Nincs teljes match</h1>
-        <p class="match-subtitle">Majdnem! Legtöbb szavazatot kapott:</p>
+        <p class="match-subtitle">${partials.length ? 'Majdnem! Legtöbb szavazatot kapott:' : 'Most nem jött össze...'}</p>
       </div>
       <div class="partial-section">
-        ${partials.map(r => voteRow(r, scores[r.id], totalFriends)).join('')}
+        ${partialHtml}
       </div>
       <div class="match-actions">
-        <a class="btn btn-primary" href="${retryHref}">🔄 Próbáljuk újra</a>
-        <button class="btn btn-secondary" onclick="window.location.href='index.html'">🏠 Főoldal</button>
+        <button class="btn btn-primary" id="retryBtn">🔄 Próbáljuk újra</button>
+        <button class="btn btn-secondary" id="homeBtn">🏠 Főoldal</button>
       </div>`;
   }
+
+  document.getElementById('retryBtn')?.addEventListener('click', () => {
+    if (roomCode) retryRoom(roomCode);
+    else window.location.href = 'index.html';
+  });
+  document.getElementById('homeBtn')?.addEventListener('click', () => { window.location.href = 'index.html'; });
+
+  // Load real photos onto match cards (fallback stays gradient + emoji)
+  container.querySelectorAll('.match-card-img').forEach(el => {
+    const url = el.dataset.photo;
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => {
+      el.style.backgroundImage = `url('${url}')`;
+      const e = el.querySelector('.match-card-emoji');
+      if (e) e.style.display = 'none';
+    };
+    img.src = url;
+  });
 
   // Animate vote bars after render
   requestAnimationFrame(() => {

@@ -1,5 +1,5 @@
 function getLocation() {
-  return new Promise((resolve, reject) => {
+  const ask = new Promise((resolve, reject) => {
     if (!navigator.geolocation) { reject(new Error('no-gps')); return; }
     navigator.geolocation.getCurrentPosition(
       pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
@@ -7,10 +7,15 @@ function getLocation() {
       { timeout: 8000, maximumAge: 60000, enableHighAccuracy: false }
     );
   });
+  // The geolocation timeout option only counts AFTER permission is granted –
+  // if the user dismisses the prompt, it would hang forever. Hard cap at 10s.
+  const hardCap = new Promise((_, reject) => setTimeout(() => reject(new Error('gps-timeout')), 10000));
+  return Promise.race([ask, hardCap]);
 }
 
 async function fetchNearbyRestaurants(lat, lon, radiusM = 2000, maxCount = 15) {
-  const q = `[out:json][timeout:12];node["amenity"="restaurant"](around:${radiusM},${lat},${lon});out ${maxCount + 10};`;
+  // nwr + "out center": many restaurants are mapped as ways (buildings), not nodes
+  const q = `[out:json][timeout:12];nwr["amenity"="restaurant"](around:${radiusM},${lat},${lon});out center ${maxCount + 10};`;
   const mirrors = [
     'https://overpass-api.de/api/interpreter',
     'https://overpass.kumi.systems/api/interpreter',
@@ -22,7 +27,8 @@ async function fetchNearbyRestaurants(lat, lon, radiusM = 2000, maxCount = 15) {
         new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 11000)),
       ]);
       const data = await resp.json();
-      const named = (data.elements || []).filter(el => el.tags && el.tags.name);
+      const named = (data.elements || []).filter(el =>
+        el.tags && el.tags.name && (el.lat != null || el.center?.lat != null));
       if (named.length >= 3) {
         return named.slice(0, maxCount).map((el, i) => osmToRestaurant(el, lat, lon, i));
       }
@@ -34,12 +40,14 @@ async function fetchNearbyRestaurants(lat, lon, radiusM = 2000, maxCount = 15) {
 function osmToRestaurant(el, userLat, userLon, seed) {
   const cuisine = el.tags.cuisine || '';
   const { emoji, tags, gradient, description } = cuisineInfo(cuisine);
-  const km = haversineKm(userLat, userLon, el.lat, el.lon);
+  const elLat = el.lat ?? el.center?.lat;
+  const elLon = el.lon ?? el.center?.lon;
+  const km = haversineKm(userLat, userLon, elLat, elLon);
   const dist = km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`;
   const street = [el.tags['addr:street'], el.tags['addr:housenumber']].filter(Boolean).join(' ');
   const osmSeed = parseInt(String(el.id).slice(-4), 10) || seed;
   return {
-    id: `osm_${el.id}`,
+    id: `osm_${(el.type || 'n')[0]}${el.id}`,
     name: el.tags.name,
     cuisine: formatCuisine(cuisine) || 'Étterem',
     rating: (3.5 + (osmSeed % 15) * 0.1).toFixed(1),
@@ -51,8 +59,8 @@ function osmToRestaurant(el, userLat, userLon, seed) {
     gradient,
     description,
     photo: getPhotoUrl(cuisine, osmSeed),
-    lat: el.lat,
-    lon: el.lon,
+    lat: elLat,
+    lon: elLon,
   };
 }
 

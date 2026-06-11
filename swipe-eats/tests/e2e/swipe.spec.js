@@ -94,27 +94,31 @@ test.describe('Swipe page – single mode', () => {
     await expect(prog).toHaveText(/^1 \//);
   });
 
+  // Swipe-out animation locks input for ~380ms, so wait for the progress
+  // counter to advance before the next click
+  async function likeAll(page, n) {
+    for (let i = 1; i <= n; i++) {
+      await page.click('#likeBtn');
+      await expect(page.locator('#progressText')).toHaveText(new RegExp(`^${i} /`));
+    }
+  }
+
   test('pass overlay appears when first friend finishes with 2 friends', async ({ page }) => {
     await goToSwipeSingle(page, { totalFriends: 2, currentFriend: 0 });
-    // Swipe through all 2 restaurants
-    await page.click('#likeBtn');
-    await page.click('#likeBtn');
-    // Pass overlay should appear
+    await likeAll(page, 2);
     const overlay = page.locator('#friendOverlay');
     await expect(overlay).toBeVisible({ timeout: 2000 });
   });
 
   test('overlay shows next friend number', async ({ page }) => {
     await goToSwipeSingle(page, { totalFriends: 2, currentFriend: 0 });
-    await page.click('#likeBtn');
-    await page.click('#likeBtn');
+    await likeAll(page, 2);
     await expect(page.locator('#nextFriendText')).toContainText('2. barát');
   });
 
   test('next friend button hides overlay and resets progress', async ({ page }) => {
     await goToSwipeSingle(page, { totalFriends: 2, currentFriend: 0 });
-    await page.click('#likeBtn');
-    await page.click('#likeBtn');
+    await likeAll(page, 2);
     await page.locator('#friendOverlay').waitFor({ state: 'visible' });
     await page.click('#nextFriendBtn');
     await expect(page.locator('#friendOverlay')).not.toBeVisible();
