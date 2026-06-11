@@ -19,9 +19,10 @@ test.describe('Home – mode selection', () => {
     await expect(page.locator('#screen-mode')).not.toBeVisible();
   });
 
-  test('multi-device mode navigates to settings', async ({ page }) => {
+  test('multi-device mode shows firebase setup when not configured', async ({ page }) => {
     await page.click('#modeMulti');
-    await expect(page.locator('#screen-settings')).toBeVisible();
+    // Firebase is not configured in test env → shows setup instructions screen
+    await expect(page.locator('#screen-firebase-setup')).toBeVisible();
   });
 
   test('settings shows friend count row after mode selection', async ({ page }) => {
@@ -95,11 +96,11 @@ test.describe('Settings – sliders', () => {
   });
 });
 
-test.describe('Join flow – ?blob= URL', () => {
-  test('shows join screen when opened with blob param', async ({ page }) => {
-    await page.goto('/swipe-eats/index.html?blob=fake123');
-    await expect(page.locator('#screen-join')).toBeVisible();
-    await expect(page.locator('#joinBtn')).toBeVisible();
+test.describe('Join flow – ?room= URL', () => {
+  test('shows firebase setup when opened with room param but firebase not configured', async ({ page }) => {
+    await page.goto('/swipe-eats/index.html?room=FAKE12');
+    // Firebase not configured in test env → shows setup screen
+    await expect(page.locator('#screen-firebase-setup')).toBeVisible();
     await expect(page.locator('#screen-mode')).not.toBeVisible();
   });
 });
