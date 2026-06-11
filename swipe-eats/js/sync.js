@@ -1,72 +1,4 @@
-// jsonblob.com – free, no-auth, CORS-enabled JSON storage
-// Used for multi-device real-time sync (2.5s polling)
-const BLOB_API = 'https://jsonblob.com/api/jsonBlob';
-
-async function createBlob(data) {
-  const res = await fetch(BLOB_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(`createBlob ${res.status}`);
-  const loc = res.headers.get('Location') || '';
-  const id = loc.split('/').pop();
-  if (!id) throw new Error('no blob ID in Location header');
-  return id;
-}
-
-async function readBlob(blobId) {
-  const res = await fetch(`${BLOB_API}/${blobId}`, {
-    headers: { 'Accept': 'application/json' },
-  });
-  if (!res.ok) throw new Error(`readBlob ${res.status}`);
-  return res.json();
-}
-
-// Read → apply updaterFn → write back; retries on conflict
-async function updateBlob(blobId, updaterFn) {
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      const current = await readBlob(blobId);
-      const updated = updaterFn(current);
-      const res = await fetch(`${BLOB_API}/${blobId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      if (res.ok) return updated;
-      throw new Error(`PUT ${res.status}`);
-    } catch (e) {
-      if (attempt === 3) throw e;
-      await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
-    }
-  }
-}
-
-// Poll every intervalMs; returns a { stop() } handle
-function pollBlob(blobId, intervalMs, onData) {
-  let active = true;
-  let timer = null;
-
-  async function tick() {
-    if (!active) return;
-    try {
-      const data = await readBlob(blobId);
-      if (active) onData(data);
-    } catch { /* silently skip failed reads */ }
-    if (active) timer = setTimeout(tick, intervalMs);
-  }
-
-  timer = setTimeout(tick, intervalMs);
-  return {
-    stop() {
-      active = false;
-      if (timer) clearTimeout(timer);
-    },
-  };
-}
-
-// ── UID helpers ───────────────────────────────────────────────────────────────
+// ─── UID helpers ──────────────────────────────────────────────────────────────
 function getOrCreateUid() {
   let uid = sessionStorage.getItem('swipe-eats-uid');
   if (!uid) {
@@ -76,7 +8,7 @@ function getOrCreateUid() {
   return uid;
 }
 
-// Tally votes from blob participants (multi mode) or localStorage (single mode)
+// Tally votes from participants map → { restaurantId: likeCount }
 function tallyVotes(restaurants, votesMap) {
   const votesList = Object.values(votesMap || {});
   const scores = {};
@@ -84,4 +16,101 @@ function tallyVotes(restaurants, votesMap) {
     scores[r.id] = votesList.filter(v => v && v[r.id] === true).length;
   });
   return scores;
+}
+
+// ─── Firebase helpers ─────────────────────────────────────────────────────────
+function getFirebaseDB() {
+  try {
+    if (typeof firebase === 'undefined') return null;
+    if (!firebase.apps?.length) return null;
+    return firebase.database();
+  } catch { return null; }
+}
+
+function isFirebaseReady() { return getFirebaseDB() !== null; }
+
+const ROOMS_PATH = 'swipe-eats/rooms';
+
+// Create a new multi-device room in Firebase
+async function createMultiRoom(restaurants, totalFriends, uid) {
+  const db = getFirebaseDB();
+  if (!db) throw new Error('firebase-not-configured');
+  const code = _genCode();
+  await db.ref(`${ROOMS_PATH}/${code}`).set({
+    restaurants,
+    totalFriends,
+    status: 'voting',
+    createdAt: Date.now(),
+    participants: {
+      [uid]: { joined: Date.now(), progress: 0, total: restaurants.length, done: false, votes: {} }
+    },
+  });
+  return code;
+}
+
+// Join an existing multi-device room
+async function joinMultiRoom(code, uid) {
+  const db = getFirebaseDB();
+  if (!db) throw new Error('firebase-not-configured');
+  const snap = await db.ref(`${ROOMS_PATH}/${code}`).once('value');
+  const room = snap.val();
+  if (!room) throw new Error('room-not-found');
+  await db.ref(`${ROOMS_PATH}/${code}/participants/${uid}`).set({
+    joined: Date.now(), progress: 0, total: room.restaurants?.length || 15, done: false, votes: {}
+  });
+  return room;
+}
+
+// Read current room state once
+async function readMultiRoom(code) {
+  const db = getFirebaseDB();
+  if (!db) throw new Error('firebase-not-configured');
+  const snap = await db.ref(`${ROOMS_PATH}/${code}`).once('value');
+  return snap.val();
+}
+
+// Write a single vote (atomic update)
+function submitVote(code, uid, restaurantId, liked) {
+  const db = getFirebaseDB();
+  if (!db) return Promise.resolve();
+  const updates = {};
+  updates[`${ROOMS_PATH}/${code}/participants/${uid}/votes/${restaurantId}`] = liked;
+  // increment progress – use a transaction so concurrent writes don't clobber each other
+  const progRef = db.ref(`${ROOMS_PATH}/${code}/participants/${uid}/progress`);
+  return Promise.all([
+    db.ref().update(updates),
+    progRef.transaction(cur => (cur || 0) + 1),
+  ]).catch(() => {/* silently ignore vote sync failures */});
+}
+
+// Mark participant as done
+function markDoneFB(code, uid, total) {
+  const db = getFirebaseDB();
+  if (!db) return Promise.resolve();
+  return db.ref(`${ROOMS_PATH}/${code}/participants/${uid}`).update({ done: true, progress: total })
+    .catch(() => {});
+}
+
+// Watch room in real-time; returns { stop() }
+function watchRoom(code, onData) {
+  const db = getFirebaseDB();
+  if (!db) return { stop: () => {} };
+  const ref = db.ref(`${ROOMS_PATH}/${code}`);
+  ref.on('value', snap => {
+    const data = snap.val();
+    if (data) onData(data);
+  });
+  return { stop: () => ref.off('value') };
+}
+
+// Delete room data after match is shown (cleanup)
+function cleanupRoom(code) {
+  const db = getFirebaseDB();
+  if (!db) return;
+  db.ref(`${ROOMS_PATH}/${code}`).remove().catch(() => {});
+}
+
+function _genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }

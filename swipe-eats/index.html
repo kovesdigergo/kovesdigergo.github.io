@@ -126,7 +126,7 @@
           <div class="share-url-label">Megosztási link</div>
           <a class="share-url-link" id="multiShareUrl" href="#" target="_blank" rel="noopener">—</a>
         </div>
-        <input type="hidden" id="multiShareBlobId" value="">
+        <input type="hidden" id="multiShareRoomCode" value="">
 
         <div class="share-btns">
           <button class="btn btn-primary" id="shareNativeBtn" style="display:none">📤 Küldés barátoknak</button>
@@ -136,19 +136,45 @@
       </main>
     </div>
 
-    <!-- ── SCREEN: Join (opened via ?blob= link) ── -->
+    <!-- ── SCREEN: Join (opened via ?room= link) ── -->
     <div class="screen" id="screen-join">
       <main class="join-main">
         <div class="join-icon">🤝</div>
         <div class="join-title">Meghívtak!</div>
         <div class="join-sub">Barátod megosztott veled egy Swipe Eats szobát. Kattints a csatlakozáshoz!</div>
-        <input type="hidden" id="joinBlobId" value="">
+        <input type="hidden" id="joinRoomCode" value="">
         <button class="btn btn-primary" id="joinBtn" style="width:100%;max-width:320px">🚀 Csatlakozom!</button>
+      </main>
+    </div>
+
+    <!-- ── SCREEN: Firebase setup instructions ── -->
+    <div class="screen" id="screen-firebase-setup">
+      <div class="screen-back">
+        <button class="back-btn" id="firebaseBackBtn">←</button>
+        <span class="screen-title">Online mód beállítása</span>
+      </div>
+      <main class="settings-main">
+        <div class="card-panel">
+          <h2>🔥 Firebase beállítása</h2>
+          <p style="color:var(--text-muted);font-size:14px;margin-bottom:12px">Az online mód egyszer igényel ~5 perces beállítást. Utána mindörökre ingyen működik.</p>
+          <ol style="padding-left:18px;color:var(--text);font-size:14px;line-height:1.8">
+            <li>Nyisd meg: <strong>console.firebase.google.com</strong></li>
+            <li>"Add project" → adj nevet → Continue × 2</li>
+            <li>Bal menü: <strong>Build → Realtime Database → Create database</strong> → "Start in test mode" → Enable</li>
+            <li>Bal menü: Project Overview ⚙️ → Project settings → Your apps → kattints a <strong>&lt;/&gt;</strong> ikonra → adj nevet → Register app</li>
+            <li>Másold ki a <code style="background:var(--surface3);padding:1px 5px;border-radius:3px">firebaseConfig</code> objektumot</li>
+            <li>A repóban nyisd meg: <strong>swipe-eats/firebase-config.js</strong> és illeszd be a konfigot</li>
+          </ol>
+        </div>
+        <p style="text-align:center;color:var(--text-muted);font-size:13px">Az ingyenes Spark csomag elegendő (1 GB tárhely, 100 egyidejű kapcsolat)</p>
       </main>
     </div>
 
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
   <script src="js/restaurants.js"></script>
   <script src="js/photos.js"></script>
   <script src="js/gps.js"></script>

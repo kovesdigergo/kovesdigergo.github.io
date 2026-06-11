@@ -4,11 +4,11 @@ function escHtml(str) {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const STORAGE_KEY    = 'swipe-eats-rooms';
-const SWIPE_THRESHOLD = 80;
+const STORAGE_KEY         = 'swipe-eats-rooms';
+const SWIPE_THRESHOLD     = 80;
 const SESSION_RESTAURANTS = 'swipe-eats-restaurants';
-const SESSION_GPS    = 'swipe-eats-gps';
-const SESSION_MODE   = 'swipe-eats-mode';   // 'single' | 'multi'
+const SESSION_GPS         = 'swipe-eats-gps';
+const SESSION_MODE        = 'swipe-eats-mode';   // 'single' | 'multi'
 
 // ─── localStorage helpers (single-device mode) ────────────────────────────────
 function getRooms() { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
@@ -30,8 +30,8 @@ function getActiveRestaurants() {
   } catch { /* ignore */ }
   return RESTAURANTS;
 }
-function isGpsMode()   { return sessionStorage.getItem(SESSION_GPS)  === '1'; }
-function getMode()     { return sessionStorage.getItem(SESSION_MODE) || 'single'; }
+function isGpsMode() { return sessionStorage.getItem(SESSION_GPS) === '1'; }
+function getMode()   { return sessionStorage.getItem(SESSION_MODE) || 'single'; }
 
 function priceLabel(level) {
   return ['', '€ Olcsó', '€€ Közepes', '€€€ Drágább', '€€€€ Fine dining'][level] || '';
@@ -43,27 +43,31 @@ function priceLabel(level) {
 function initHome() {
   const params = new URLSearchParams(window.location.search);
 
-  // ── Multi-device JOIN flow: someone opened a shared ?blob= link ──────────────
-  const blobId = params.get('blob');
-  if (blobId) {
+  // ── Multi-device JOIN: someone opened a shared ?room= link ───────────────────
+  const joinCode = params.get('room');
+  if (joinCode) {
+    if (!isFirebaseReady()) {
+      showScreen('screen-firebase-setup');
+      return;
+    }
     showScreen('screen-join');
-    document.getElementById('joinBlobId').value = blobId;
+    document.getElementById('joinRoomCode').value = joinCode;
     document.getElementById('joinBtn').addEventListener('click', async () => {
       const uid = getOrCreateUid();
       setLoading(true, '⏳ Csatlakozás...');
       try {
-        const data = await updateBlob(blobId, d => {
-          d.participants = d.participants || {};
-          d.participants[uid] = { joined: Date.now(), progress: 0, total: d.restaurants?.length || 15, done: false, votes: {} };
-          return d;
-        });
-        sessionStorage.setItem(SESSION_RESTAURANTS, JSON.stringify(data.restaurants || []));
+        const room = await joinMultiRoom(joinCode, uid);
+        sessionStorage.setItem(SESSION_RESTAURANTS, JSON.stringify(room.restaurants || []));
         sessionStorage.setItem(SESSION_MODE, 'multi');
         setLoading(false);
-        window.location.href = `swipe.html?blob=${blobId}&mode=multi`;
-      } catch {
+        window.location.href = `swipe.html?room=${joinCode}&mode=multi`;
+      } catch (e) {
         setLoading(false);
-        showError('Nem sikerült csatlakozni. Kérj új linket!');
+        if (e.message === 'room-not-found') {
+          showError('Szoba nem található. Kérj friss linket!');
+        } else {
+          showError('Nem sikerült csatlakozni. Ellenőrizd az internet kapcsolatot!');
+        }
       }
     });
     return;
@@ -80,7 +84,11 @@ function initHome() {
 
   document.getElementById('modeMulti').addEventListener('click', () => {
     sessionStorage.setItem(SESSION_MODE, 'multi');
-    document.getElementById('friendsRow').style.display = 'flex';
+    document.getElementById('friendsRow').style.display = 'none';
+    if (!isFirebaseReady()) {
+      showScreen('screen-firebase-setup');
+      return;
+    }
     showScreen('screen-settings');
   });
 
@@ -110,31 +118,20 @@ function initHome() {
     sessionStorage.setItem(SESSION_RESTAURANTS, JSON.stringify(list));
     sessionStorage.setItem(SESSION_GPS, gps ? '1' : '0');
 
-    setLoading(false);
-
     if (mode === 'multi') {
-      // Create jsonblob
       setLoading(true, '☁️ Szoba létrehozása...');
       try {
-        const uid = getOrCreateUid();
-        const blob = {
-          totalFriends: friendCount,
-          restaurants: list,
-          status: 'voting',
-          participants: {
-            [uid]: { joined: Date.now(), progress: 0, total: list.length, done: false, votes: {} }
-          },
-        };
-        const newBlobId = await createBlob(blob);
+        const uid  = getOrCreateUid();
+        const code = await createMultiRoom(list, friendCount, uid);
         setLoading(false);
-        showMultiShareScreen(newBlobId, gps);
+        showMultiShareScreen(code, gps);
       } catch {
         setLoading(false);
-        showError('Hálózati hiba – ellenőrizd az internetet, majd próbáld újra!');
+        showError('Hálózati hiba – ellenőrizd az internetet és próbáld újra!');
         document.getElementById('createRoom').disabled = false;
       }
     } else {
-      // localStorage room – go directly to swipe, no share screen needed
+      setLoading(false);
       const code = generateCode();
       saveRoom({ code, totalFriends: friendCount, currentFriend: 0, votes: {} });
       window.location.href = `swipe.html?room=${code}&mode=single`;
@@ -153,11 +150,11 @@ function initHome() {
   document.getElementById('radiusMinus')?.addEventListener('click', () => stepSlider('radiusSlider', -1));
   document.getElementById('radiusPlus')?.addEventListener('click',  () => stepSlider('radiusSlider',  1));
 
-  // ── Multi mode: share screen events ──────────────────────────────────────────
+  // ── Multi share screen ────────────────────────────────────────────────────────
   document.getElementById('goToSwipeMulti').addEventListener('click', () => {
-    const bId = document.getElementById('multiShareBlobId').value;
-    const uid = getOrCreateUid();
-    window.location.href = `swipe.html?blob=${bId}&mode=multi&uid=${uid}`;
+    const code = document.getElementById('multiShareRoomCode').value;
+    const uid  = getOrCreateUid();
+    window.location.href = `swipe.html?room=${code}&mode=multi&uid=${uid}`;
   });
   document.getElementById('copyMultiBtn').addEventListener('click', async () => {
     const url = document.getElementById('multiShareUrl').href;
@@ -168,6 +165,9 @@ function initHome() {
     const url = document.getElementById('multiShareUrl').href;
     try { await navigator.share({ title: 'Swipe Eats', text: 'Válasszunk éttermet együtt! 🍽️', url }); } catch { /* user cancelled */ }
   });
+
+  // ── Firebase setup: back button ───────────────────────────────────────────────
+  document.getElementById('firebaseBackBtn')?.addEventListener('click', () => showScreen('screen-mode'));
 
   // ── Notification opt-in (iOS Safari has no Notification API – hide prompt) ────
   if (!('Notification' in window) || Notification.permission !== 'default') {
@@ -214,15 +214,14 @@ function setLoading(visible, msg) {
   if (lt && msg) lt.textContent = msg;
 }
 
-function showMultiShareScreen(blobId, gps) {
-  const url = `${location.origin}${location.pathname}?blob=${blobId}`;
-  document.getElementById('multiShareBlobId').value = blobId;
+function showMultiShareScreen(roomCode, gps) {
+  const url = `${location.origin}${location.pathname}?room=${roomCode}`;
+  document.getElementById('multiShareRoomCode').value = roomCode;
   const link = document.getElementById('multiShareUrl');
   link.href = url;
   link.textContent = url.replace(/^https?:\/\//, '');
   if (gps) document.getElementById('multiGpsBadge')?.style.setProperty('display', 'flex');
   if (navigator.share) document.getElementById('shareNativeBtn')?.style.setProperty('display', 'block');
-  // Re-enable so the button works again if the user navigates back
   document.getElementById('createRoom').disabled = false;
   showScreen('screen-share-multi');
 }
@@ -233,7 +232,7 @@ function showError(msg) {
   el.textContent = msg;
   el.style.display = 'block';
   clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
 function flashBtn(id, label) {
@@ -248,19 +247,18 @@ function flashBtn(id, label) {
 // SWIPE PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 function initSwipe() {
-  const params  = new URLSearchParams(window.location.search);
+  const params   = new URLSearchParams(window.location.search);
   const roomCode = params.get('room');
-  const blobId  = params.get('blob');
-  const mode    = params.get('mode') || 'single';
+  const mode     = params.get('mode') || 'single';
 
-  if (!roomCode && !blobId) { window.location.href = 'index.html'; return; }
+  if (!roomCode) { window.location.href = 'index.html'; return; }
 
   const restaurants = getActiveRestaurants();
   let currentIndex  = 0;
   let animating     = false;
   const uid         = getOrCreateUid();
 
-  // ── Header setup (room code badge stays hidden in single-phone mode) ─────────
+  // ── Header ────────────────────────────────────────────────────────────────────
   if (mode === 'multi') {
     const rc = document.getElementById('roomCodeDisplay');
     rc.textContent = '🌐 Online';
@@ -299,7 +297,6 @@ function initSwipe() {
     const card = document.createElement('div');
     card.className = 'restaurant-card';
     card.style.cssText = `z-index:${zIndexes[si]};transform:${transforms[si]};`;
-
     card.innerHTML = `
       <div class="stamp stamp-like">IGEN ♥</div>
       <div class="stamp stamp-nope">NEM ✕</div>
@@ -315,8 +312,6 @@ function initSwipe() {
         ${r.description ? `<p class="card-desc">${escHtml(r.description)}</p>` : ''}
         <span class="price-label">${escHtml(priceLabel(r.priceLevel))}</span>
       </div>`;
-
-    // Apply photo (with gradient fallback)
     applyCardPhoto(card.querySelector('.card-image'), r.photo || null, r.gradient, r.emoji);
     return card;
   }
@@ -365,20 +360,11 @@ function initSwipe() {
   function doSwipe(card, direction, restaurant) {
     if (animating) return;
     animating = true;
-
     const liked = direction === 'right';
 
-    if (mode === 'multi' && blobId) {
-      // Write vote to blob (fire-and-forget); capture progress now, the
-      // updater runs async after currentIndex may have moved on
-      const progressNow = currentIndex + 1;
-      updateBlob(blobId, d => {
-        const p = d.participants?.[uid];
-        if (p) { p.votes = p.votes || {}; p.votes[restaurant.id] = liked; p.progress = progressNow; }
-        return d;
-      }).catch(() => {/* silently ignore */});
+    if (mode === 'multi') {
+      submitVote(roomCode, uid, restaurant.id, liked);
     } else {
-      // localStorage
       const room = getRoom(roomCode);
       if (room) {
         const key = String(room.currentFriend);
@@ -396,7 +382,7 @@ function initSwipe() {
 
     const xOut = direction === 'right' ? window.innerWidth + 150 : -(window.innerWidth + 150);
     card.style.transition = 'transform 0.38s ease';
-    card.style.transform = `translateX(${xOut}px) rotate(${direction === 'right' ? 28 : -28}deg)`;
+    card.style.transform  = `translateX(${xOut}px) rotate(${direction === 'right' ? 28 : -28}deg)`;
 
     const btn = direction === 'right' ? document.getElementById('likeBtn') : document.getElementById('nopeBtn');
     btn.classList.add('flash');
@@ -416,17 +402,11 @@ function initSwipe() {
 
   // ── Done swiping ───────────────────────────────────────────────────────────────
   function finishSwiping() {
-    if (mode === 'multi' && blobId) {
-      // Mark done in blob then go to waiting screen
-      updateBlob(blobId, d => {
-        const p = d.participants?.[uid];
-        if (p) { p.done = true; p.progress = restaurants.length; }
-        return d;
-      }).finally(() => {
-        window.location.href = `waiting.html?blob=${blobId}`;
+    if (mode === 'multi') {
+      markDoneFB(roomCode, uid, restaurants.length).finally(() => {
+        window.location.href = `waiting.html?room=${roomCode}`;
       });
     } else {
-      // Single device: pass phone or go to match
       const room = getRoom(roomCode);
       if (!room) { window.location.href = 'index.html'; return; }
       if (room.currentFriend + 1 >= room.totalFriends) {
@@ -464,14 +444,13 @@ function initSwipe() {
 // WAITING PAGE  (multi-device only)
 // ═══════════════════════════════════════════════════════════════════════════════
 function initWaiting() {
-  const params = new URLSearchParams(window.location.search);
-  const blobId = params.get('blob');
-  if (!blobId) { window.location.href = 'index.html'; return; }
+  const params   = new URLSearchParams(window.location.search);
+  const roomCode = params.get('room');
+  if (!roomCode) { window.location.href = 'index.html'; return; }
 
   let redirected = false;
 
-  // Show the share URL so the creator can still send the link while waiting
-  const shareUrl = `${location.origin}${location.pathname.replace('waiting.html', 'index.html')}?blob=${blobId}`;
+  const shareUrl  = `${location.origin}${location.pathname.replace('waiting.html', 'index.html')}?room=${roomCode}`;
   const shareLink = document.getElementById('waitShareUrl');
   if (shareLink) { shareLink.href = shareUrl; shareLink.textContent = shareUrl.replace(/^https?:\/\//, ''); }
   document.getElementById('copyWaitLink')?.addEventListener('click', async () => {
@@ -480,9 +459,10 @@ function initWaiting() {
   });
 
   function render(data) {
+    if (!data) return;
     const participants = Object.entries(data.participants || {});
-    const total = data.totalFriends || participants.length || 1;
-    const doneCount = participants.filter(([, p]) => p.done).length;
+    const total        = data.totalFriends || participants.length || 1;
+    const doneCount    = participants.filter(([, p]) => p.done).length;
 
     document.getElementById('waitCount').textContent = `${doneCount} / ${total} barát végzett`;
 
@@ -498,26 +478,19 @@ function initWaiting() {
       </div>`;
     }).join('');
 
-    // Auto-redirect when everyone who was expected has finished
     if (doneCount >= total && total > 0 && !redirected) {
       redirected = true;
-      poller.stop();
+      watcher.stop();
       document.getElementById('waitCount').textContent = '🎉 Mindenki végzett!';
-      setTimeout(() => { window.location.href = `match.html?blob=${blobId}`; }, 1200);
+      setTimeout(() => { window.location.href = `match.html?room=${roomCode}&mode=multi`; }, 1200);
     }
   }
 
-  // Initial load
-  readBlob(blobId).then(render).catch(() => {
-    showError('Nem sikerült betölteni az adatokat. Ellenőrizd az internetkapcsolatot!');
-  });
+  const watcher = watchRoom(roomCode, render);
 
-  const poller = pollBlob(blobId, 2500, render);
-
-  // Force-start always visible
   document.getElementById('forceStart')?.addEventListener('click', () => {
-    poller.stop();
-    window.location.href = `match.html?blob=${blobId}`;
+    watcher.stop();
+    window.location.href = `match.html?room=${roomCode}&mode=multi`;
   });
 }
 
@@ -525,31 +498,33 @@ function initWaiting() {
 // MATCH PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 function initMatch() {
-  const params   = new URLSearchParams(window.location.search);
-  const blobId   = params.get('blob');
-  const roomCode = params.get('room');
+  const params    = new URLSearchParams(window.location.search);
+  const roomCode  = params.get('room');
+  const mode      = params.get('mode') || 'single';
   const container = document.getElementById('matchPage');
 
-  if (blobId) {
-    readBlob(blobId).then(data => {
+  if (!roomCode) { window.location.href = 'index.html'; return; }
+
+  if (mode === 'multi') {
+    readMultiRoom(roomCode).then(data => {
+      if (!data) { window.location.href = 'index.html'; return; }
       const restaurants = data.restaurants || getActiveRestaurants();
-      const votesMap = {};
-      Object.entries(data.participants || {}).forEach(([uid, p]) => { votesMap[uid] = p.votes || {}; });
+      const votesMap    = {};
+      Object.entries(data.participants || {}).forEach(([u, p]) => { votesMap[u] = p.votes || {}; });
       const scores = tallyVotes(restaurants, votesMap);
-      renderMatchPage(container, restaurants, scores, Object.keys(votesMap).length, null, blobId);
+      renderMatchPage(container, restaurants, scores, data.totalFriends || Object.keys(votesMap).length, roomCode);
+      cleanupRoom(roomCode);
     }).catch(() => window.location.href = 'index.html');
-  } else if (roomCode) {
+  } else {
     const room = getRoom(roomCode);
     if (!room) { window.location.href = 'index.html'; return; }
     const restaurants = getActiveRestaurants();
-    const scores = tallyVotes(restaurants, room.votes);
-    renderMatchPage(container, restaurants, scores, room.totalFriends, roomCode, null);
-  } else {
-    window.location.href = 'index.html';
+    const scores      = tallyVotes(restaurants, room.votes);
+    renderMatchPage(container, restaurants, scores, room.totalFriends, roomCode);
   }
 }
 
-function renderMatchPage(container, restaurants, scores, totalFriends, roomCode, blobId) {
+function renderMatchPage(container, restaurants, scores, totalFriends, roomCode) {
   const fullMatches = restaurants.filter(r => scores[r.id] >= totalFriends);
   const partials    = restaurants.filter(r => scores[r.id] > 0 && scores[r.id] < totalFriends)
     .sort((a, b) => scores[b.id] - scores[a.id]).slice(0, 6);
@@ -595,7 +570,6 @@ function renderMatchPage(container, restaurants, scores, totalFriends, roomCode,
   });
   document.getElementById('homeBtn')?.addEventListener('click', () => { window.location.href = 'index.html'; });
 
-  // Load real photos onto match cards (fallback stays gradient + emoji)
   container.querySelectorAll('.match-card-img').forEach(el => {
     const url = el.dataset.photo;
     if (!url) return;
@@ -608,7 +582,6 @@ function renderMatchPage(container, restaurants, scores, totalFriends, roomCode,
     img.src = url;
   });
 
-  // Animate vote bars after render
   requestAnimationFrame(() => {
     document.querySelectorAll('.vote-bar-fill[data-pct]').forEach(el => {
       el.style.width = el.dataset.pct + '%';
@@ -699,8 +672,8 @@ function startConfetti() {
 // ─── Router ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const p = window.location.pathname;
-  if (p.endsWith('swipe.html'))   initSwipe();
+  if (p.endsWith('swipe.html'))        initSwipe();
   else if (p.endsWith('match.html'))   initMatch();
   else if (p.endsWith('waiting.html')) initWaiting();
-  else initHome();
+  else                                  initHome();
 });
